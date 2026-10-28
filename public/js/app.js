@@ -198,6 +198,71 @@ function valueAt(spec, x, key) {
   return spec[key][Math.max(0, Math.min(spec.x.length - 1, i))];
 }
 
+// ---------- texto emergente de cada banda ----------
+const hEsc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function wrapText(s, n = 64) {
+  const words = String(s).split(' ');
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    if ((cur + ' ' + w).trim().length > n && cur) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim();
+  }
+  if (cur) lines.push(cur);
+  return lines.map(hEsc).join('<br>');
+}
+const firstSentence = (s) => String(s || '').split(/(?<=\.)\s/)[0];
+
+function peakHover(p) {
+  const head = `<b>${p.x} cm⁻¹</b> · ${hEsc(p.intensityText)}, ${hEsc(p.shape)}`;
+  const a = p.assignment;
+  if (a) {
+    const dev = p.x - a.center;
+    let t = `${head}<br><b>${wrapText(a.vib, 56)}</b><br>Grupo: <b>${hEsc(a.groupName)}</b>` +
+      `<br>Esperado ≈ ${a.center} cm⁻¹ (${a.range[0]}–${a.range[1]}) · Δ ${dev >= 0 ? '+' : ''}${dev}`;
+    if (a.shared) t += '<br><i>Componente adicional de la misma vibración</i>';
+    if (p.alternatives?.length) t += `<br><span style="font-size:11px">También posible: ${hEsc(p.alternatives[0].vib)} (${hEsc(p.alternatives[0].groupName)})</span>`;
+    return t + '<br><i>Clic: ver explicación</i>';
+  }
+  let what;
+  if (p.artifact) what = 'Artefacto: CO₂ atmosférico (no pertenece a la muestra)';
+  else if (p.correlation?.length && p.x >= 1500) what = `Posible: ${p.correlation.slice(0, 2).map((c) => c.vib).join(' / ')}`;
+  else if (p.x < 1500 && /huella dactilar/i.test(p.note || '')) what = 'Huella dactilar: modos esqueléticos acoplados (C–C, C–O, flexiones), propios de esta molécula';
+  else if (p.note) {
+    what = firstSentence(p.note);
+    if (what.length > 120) what = what.slice(0, 117) + '…';
+  } else what = p.x < 1500 ? 'Región de huella dactilar' : 'Sin asignación';
+  return `${head}<br><b>${wrapText(what, 56)}</b><br><i>Clic: ver explicación</i>`;
+}
+
+/** Agrupa bandas simuladas muy próximas (±8 cm⁻¹) en un solo marcador. */
+function bandClusters(bands) {
+  const sorted = bands.filter((b) => (b.height ?? 0) >= 0.02).sort((a, b) => b.center - a.center);
+  const out = [];
+  for (const b of sorted) {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.ref - b.center) <= 8) last.items.push(b);
+    else out.push({ ref: b.center, items: [b] });
+  }
+  return out.map((c) => {
+    const top = c.items.reduce((m, b) => (b.height > m.height ? b : m));
+    return { x: top.center, items: c.items };
+  });
+}
+function clusterHover(c) {
+  const lines = c.items.map((b) => `<b>${wrapText(b.vib, 56)}</b><br>Grupo: <b>${hEsc(b.groupName)}</b> · ${hEsc(b.labelText)}${b.overtone ? ' (sobretono)' : ''}`);
+  return `<b>≈ ${c.x} cm⁻¹</b> <span style="font-size:11px">(intervalo ${c.items[0].range[0]}–${c.items[0].range[1]})</span><br>${lines.join('<br>')}<br><i>Clic: ver explicación</i>`;
+}
+
+function openRowFor(x, index) {
+  const rows = $$('#peakTable tbody tr.main');
+  const tr = index != null ? rows.find((r) => Number(r.dataset.i) === index) : rows.find((r) => Number(r.dataset.x) === x);
+  if (!tr) return;
+  const d = tr.nextElementSibling;
+  d.hidden = false;
+  tr.classList.add('on');
+  tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function renderChart() {
   const el = $('#chart');
   if (typeof Plotly === 'undefined') return;
@@ -207,10 +272,11 @@ function renderChart() {
   const key = state.yAxis;
   const isT = key === 'T';
   const traces = [];
+  const card = css('--surface');
   if (exp && $('#showExp').checked) {
     traces.push({
       x: exp.x, y: exp[key], name: 'Experimental', mode: 'lines', line: { color: css('--exp'), width: 1.5 },
-      hovertemplate: '%{x} cm⁻¹ · %{y:.2f}<extra>Experimental</extra>'
+      hoverinfo: 'skip'
     });
   }
   if (sim && $('#showSim').checked) {
@@ -218,7 +284,27 @@ function renderChart() {
       x: sim.x, y: sim[key], name: exp ? 'Simulado (estructura)' : 'Simulado', mode: 'lines',
       line: { color: css('--sim'), width: exp ? 1.2 : 1.6, dash: exp ? 'dot' : 'solid' },
       opacity: exp ? 0.85 : 1,
-      hovertemplate: '%{x} cm⁻¹ · %{y:.2f}<extra>Simulado</extra>'
+      hoverinfo: 'skip'
+    });
+  }
+  // marcadores interactivos: al pasar el puntero muestran la asignación de cada banda
+  if (exp && $('#showExp').checked) {
+    const peaks = state.exp.peaks;
+    traces.push({
+      x: peaks.map((p) => p.x), y: peaks.map((p) => valueAt(exp, p.x, key)),
+      customdata: peaks.map((_, i) => i), text: peaks.map(peakHover),
+      name: 'Picos (pase el puntero)', mode: 'markers', hovertemplate: '%{text}<extra></extra>',
+      marker: { size: 9, color: peaks.map((p) => (p.assignment ? css('--exp') : '#94a3b8')), opacity: 0.9, line: { color: card, width: 1.5 } },
+      hoverlabel: { bgcolor: card, bordercolor: css('--exp'), font: { color: css('--text'), size: 12 }, align: 'left' }
+    });
+  } else if (sim && $('#showSim').checked) {
+    const cl = bandClusters(simBands());
+    traces.push({
+      x: cl.map((c) => c.x), y: cl.map((c) => valueAt(sim, c.x, key)),
+      customdata: cl.map(() => null), text: cl.map(clusterHover),
+      name: 'Bandas (pase el puntero)', mode: 'markers', hovertemplate: '%{text}<extra></extra>',
+      marker: { size: 8, color: css('--sim'), opacity: 0.9, line: { color: card, width: 1.5 } },
+      hoverlabel: { bgcolor: card, bordercolor: css('--sim'), font: { color: css('--text'), size: 12 }, align: 'left' }
     });
   }
   const shapes = [];
@@ -265,7 +351,7 @@ function renderChart() {
       ? { title: { text: 'Transmitancia (%)' }, range: [0, 112], gridcolor: grid, zeroline: false }
       : { title: { text: 'Absorbancia (normalizada)' }, range: [-0.03, 1.18], gridcolor: grid, zeroline: false },
     legend: { orientation: 'h', x: 0, y: -0.2 },
-    shapes, annotations, hovermode: 'x unified'
+    shapes, annotations, hovermode: 'closest', hoverdistance: 30
   };
   if (!el.dataset.plot) { el.innerHTML = ''; el.dataset.plot = '1'; }
   Plotly.react(el, traces, layout, {
@@ -273,6 +359,14 @@ function renderChart() {
     modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
     toImageButtonOptions: { filename: 'espectro_IR', scale: 2 }
   });
+  if (!el.dataset.click) {
+    el.dataset.click = '1';
+    el.on('plotly_click', (ev) => {
+      const pt = ev.points && ev.points[0];
+      if (!pt || pt.data.mode !== 'markers') return;
+      openRowFor(Math.round(pt.x), pt.customdata);
+    });
+  }
   // título y similitud
   const mol = currentMolecule();
   const name = state.exp?.meta?.title || mol?.formula || '';
