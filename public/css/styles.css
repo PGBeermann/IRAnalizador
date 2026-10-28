@@ -158,11 +158,11 @@ input[type=file] { font-size: .85rem; width: 100%; margin-bottom: .2rem; color: 
 .empty { display: grid; place-items: center; height: 100%; text-align: center; color: var(--muted); padding: 1rem; border: 1px dashed var(--border); border-radius: 10px; }
 
 /* ---------- compuesto ---------- */
-.mol { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr); gap: .8rem; align-items: start; }
-@media (max-width: 560px) { .mol { grid-template-columns: 1fr; } }
-.mol-svg { background: #fff; border: 1px solid var(--border); border-radius: 8px; min-height: 180px; display: grid; place-items: center; }
+/* La estructura y los datos van lado a lado si caben; si no, los datos pasan debajo */
+.mol { display: flex; flex-wrap: wrap; gap: .8rem 1rem; align-items: flex-start; }
+.mol-svg { flex: 1 1 180px; max-width: 300px; background: #fff; border: 1px solid var(--border); border-radius: 8px; min-height: 160px; display: grid; place-items: center; }
 .mol-svg svg { width: 100%; height: auto; max-height: 240px; display: block; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: .25rem .7rem; margin: 0; font-size: .86rem; }
+.kv { flex: 1 1 250px; min-width: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .25rem .7rem; margin: 0; font-size: .86rem; }
 .kv dt { color: var(--muted); white-space: nowrap; }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 .kv code { font-family: var(--mono); font-size: .8rem; }
