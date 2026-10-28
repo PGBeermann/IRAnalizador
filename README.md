@@ -1,5 +1,7 @@
 # IRAnalizador
 
+**En línea:** https://ir.quimicaeduc.org
+
 Aplicación web (Node.js) para el **análisis de espectros infrarrojos (IR) de compuestos orgánicos**.
 
 - **Simulación** del espectro IR a partir de una estructura dibujada en el editor **JSME**.
@@ -56,7 +58,7 @@ El repositorio incluye un `Dockerfile` listo para producción (Node 24, usuario 
 2. **Provider**: GitHub (o *Git* público) → repositorio `PGBeermann/IRAnalizador`, rama `main`.
 3. **Build Type**: `Dockerfile` (ruta `./Dockerfile`, contexto `.`).
 4. **Environment**: `PORT=3000` (opcional).
-5. **Domains**: añada el dominio (p. ej. `ir.vipcursos.cloud`), **Container Port** `3000`, HTTPS con Let's Encrypt. El registro DNS `A` del subdominio debe apuntar a la IP del VPS.
+5. **Domains**: añada el dominio (en producción: `ir.quimicaeduc.org`), **Container Port** `3000`, HTTPS con Let's Encrypt. El registro DNS `A` del subdominio debe apuntar a la IP del VPS.
 6. **Deploy**. Active *Autodeploy* para que cada `git push` a `main` vuelva a desplegar.
 
 ## Fuentes de datos y licencias
