@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IRAnalizador · Espectros IR de compuestos orgánicos</title>
+  <meta name="description" content="Simulación de espectros IR desde una estructura dibujada, consulta de espectros experimentales (NIST WebBook) y asignación detallada de bandas.">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="/vendor/plotly/plotly.min.js" defer></script>
+  <script src="/js/app.js" defer></script>
+  <script src="/vendor/jsme/jsme.nocache.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="currentColor"/><path d="M5 12h4l2 14 3-18 3 22 3-16 2 6 3-9 2 13 3-8h5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <div>
+        <h1>IRAnalizador</h1>
+        <p>Análisis de espectros infrarrojos de compuestos orgánicos</p>
+      </div>
+    </div>
+    <nav class="toplinks">
+      <a href="#fundamentos">Fundamentos</a>
+      <a href="https://github.com/PGBeermann/IRAnalizador" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- ============================ PANEL IZQUIERDO ============================ -->
+    <aside class="side">
+      <section class="card">
+        <h2><span class="step">1</span> Dibuje la estructura</h2>
+        <div id="jsme_container" class="jsme-box"><div class="jsme-loading">Cargando editor JSME…</div></div>
+        <div class="row gap">
+          <label class="field grow">
+            <span>Fase de la muestra</span>
+            <select id="phase">
+              <option value="condensada">Condensada (líquido puro / sólido)</option>
+              <option value="gas">Gas / disolución diluida</option>
+            </select>
+          </label>
+        </div>
+        <div class="row gap wrap">
+          <button id="btnSimulate" class="btn primary">Simular espectro IR</button>
+          <button id="btnFindExp" class="btn">Buscar espectro experimental</button>
+          <button id="btnClear" class="btn ghost" title="Borrar el dibujo">Limpiar</button>
+        </div>
+        <details class="examples" open>
+          <summary>Ejemplos</summary>
+          <div id="examples" class="chips"></div>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">2</span> Bases de datos externas</h2>
+        <p class="hint">Busca el compuesto en <b>PubChem</b> y sus espectros IR experimentales en el <b>NIST Chemistry WebBook</b>.</p>
+        <form id="searchForm" class="row gap">
+          <input id="searchInput" type="search" placeholder="Nombre en inglés, CAS o SMILES (p. ej. ethyl acetate, 64-17-5)" autocomplete="off" required>
+          <button class="btn primary" type="submit">Buscar</button>
+        </form>
+        <div id="searchResult"></div>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">3</span> Analice su propio espectro</h2>
+        <p class="hint">Archivo JCAMP-DX (.jdx, .dx) o tabla de dos columnas (.csv, .txt) con número de onda en cm⁻¹.</p>
+        <form id="uploadForm">
+          <input id="fileInput" type="file" accept=".jdx,.dx,.jcamp,.csv,.txt,.tsv" required>
+          <div class="row gap">
+            <label class="field grow">
+              <span>Eje Y del archivo</span>
+              <select id="yMode">
+                <option value="auto">Detectar automáticamente</option>
+                <option value="T%">Transmitancia (%)</option>
+                <option value="T">Transmitancia (0–1)</option>
+                <option value="A">Absorbancia</option>
+              </select>
+            </label>
+          </div>
+          <label class="check"><input type="checkbox" id="useStructure" checked> Asignar picos usando la estructura dibujada</label>
+          <button class="btn primary" type="submit">Analizar espectro</button>
+        </form>
+      </section>
+    </aside>
+
+    <!-- ============================ RESULTADOS ============================ -->
+    <section class="results">
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <section class="card chart-card">
+        <div class="chart-head">
+          <h2 id="chartTitle">Espectro IR</h2>
+          <div id="similarity" class="badge hidden"></div>
+        </div>
+        <div class="toolbar">
+          <label class="check"><input type="checkbox" id="showSim" checked> Simulado</label>
+          <label class="check"><input type="checkbox" id="showExp" checked> Experimental</label>
+          <label class="check"><input type="checkbox" id="showLabels" checked> Etiquetas</label>
+          <label class="check"><input type="checkbox" id="showRegions" checked> Regiones</label>
+          <div class="seg" role="group" aria-label="Eje Y">
+            <button data-y="T" class="on">%T</button><button data-y="A">Absorbancia</button>
+          </div>
+        </div>
+        <div id="chart" class="chart">
+          <div class="empty">
+            <p><b>Dibuje una molécula</b> y pulse <em>Simular espectro IR</em>, elija un ejemplo, o busque un compuesto en las bases de datos.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid2">
+        <section class="card" id="molCard" hidden>
+          <h2>Compuesto</h2>
+          <div class="mol">
+            <div id="molSvg" class="mol-svg"></div>
+            <dl id="molInfo" class="kv"></dl>
+          </div>
+        </section>
+        <section class="card" id="groupsCard" hidden>
+          <h2>Grupos funcionales detectados</h2>
+          <p class="hint">Pulse un grupo para resaltarlo en la estructura y en el espectro.</p>
+          <div id="groups" class="chips groups"></div>
+        </section>
+      </div>
+
+      <section class="card" id="diagCard" hidden>
+        <h2>Interpretación general del espectro</h2>
+        <ul id="diagnosis" class="diag"></ul>
+      </section>
+
+      <section class="card" id="tableCard" hidden>
+        <h2 id="tableTitle">Asignación de bandas</h2>
+        <p class="hint" id="tableHint"></p>
+        <div class="table-wrap">
+          <table id="peakTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" id="explainCard" hidden>
+        <h2>Explicación detallada</h2>
+        <div id="explanation" class="explain"></div>
+      </section>
+
+      <section class="card" id="fundamentos">
+        <details>
+          <summary><h2>Fundamentos de la espectroscopía IR</h2></summary>
+          <div class="explain">
+            <p>Una molécula absorbe radiación infrarroja cuando la frecuencia de la luz coincide con la de una de sus <b>vibraciones</b> y esa vibración <b>cambia el momento dipolar</b> de la molécula. Por eso los enlaces muy polares (C=O, O–H, C–O, C–F) dan bandas intensas, y los enlaces simétricos (C≡C interno, C=C trans) dan bandas débiles o inexistentes.</p>
+            <p><b>Ley de Hooke.</b> Un enlace se comporta aproximadamente como un resorte: <span class="formula">ν̃ = (1 / 2πc) · √(k / μ)</span>, donde <i>k</i> es la constante de fuerza (orden de enlace) y <i>μ</i> la masa reducida de los átomos. De ahí que:</p>
+            <ul>
+              <li>Los enlaces con H (masa pequeña) aparecen a número de onda alto: O–H, N–H, C–H (3700–2700 cm⁻¹).</li>
+              <li>Al aumentar el orden de enlace sube la frecuencia: C≡C ≈ 2150 &gt; C=C ≈ 1650 &gt; C–C ≈ 1000 cm⁻¹.</li>
+              <li>Al aumentar la masa baja la frecuencia: C–H 3000 &gt; C–D 2200; C–Cl 750 &gt; C–Br 600 &gt; C–I 500 cm⁻¹.</li>
+              <li>Hibridación: C(sp)–H 3300 &gt; C(sp²)–H 3100–3000 &gt; C(sp³)–H 2960–2850 cm⁻¹ (más carácter s → enlace más corto y fuerte).</li>
+            </ul>
+            <p><b>Factores que desplazan una banda.</b> La <i>conjugación</i> baja la frecuencia de C=O y C=C (deslocaliza los electrones π); la <i>tensión de anillo</i> la sube en carbonilos cíclicos pequeños; los <i>efectos inductivos</i> de átomos electronegativos (Cl, O) la suben; los <i>puentes de hidrógeno</i> bajan y ensanchan las bandas O–H y N–H; la <i>fase</i> importa: en gas no hay asociación y aparecen bandas agudas con estructura rotacional (ramas P, Q, R).</p>
+            <p><b>Forma de trabajar.</b> 1) Mire primero la región de grupos funcionales (4000–1500 cm⁻¹): ¿hay O–H/N–H? ¿C–H por encima o por debajo de 3000? ¿triples enlaces? ¿C=O? 2) Confirme con bandas secundarias (C–O de ésteres, doblete de Fermi del aldehído, flexiones fuera del plano del anillo). 3) Use la huella dactilar (1500–400 cm⁻¹) para comparar con espectros de referencia.</p>
+            <p class="note"><b>Sobre la simulación.</b> El espectro simulado se construye con frecuencias de grupo empíricas (tablas de correlación con correcciones por conjugación, tensión de anillo, sustitución, puentes de hidrógeno y fase). Reproduce bien las bandas diagnósticas, pero no los acoplamientos finos de la huella dactilar; para ello compare siempre con un espectro experimental.</p>
+          </div>
+        </details>
+      </section>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Espectros experimentales: <a href="https://webbook.nist.gov/chemistry/" target="_blank" rel="noopener">NIST Chemistry WebBook, SRD 69</a> (© U.S. Secretary of Commerce). Identificación de compuestos: <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noopener">PubChem</a>. Editor molecular: <a href="https://jsme-editor.github.io/" target="_blank" rel="noopener">JSME</a>. Química computacional: <a href="https://www.rdkit.org/" target="_blank" rel="noopener">RDKit</a>.</p>
+    <p>IRAnalizador · herramienta docente. Las simulaciones son aproximaciones empíricas.</p>
+  </footer>
+</body>
+</html>

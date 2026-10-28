@@ -1,0 +1,32 @@
+{
+  "name": "iranalizador",
+  "version": "1.0.0",
+  "description": "Análisis de espectros IR de compuestos orgánicos: simulación desde estructura (JSME), consulta a NIST WebBook/PubChem y asignación detallada de bandas.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node test/smoke.mjs"
+  },
+  "keywords": [],
+  "author": "Pedro González Beermann",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "@rdkit/rdkit": "^2026.9.1",
+    "compression": "^1.8.2",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "jcampconverter": "^12.5.11",
+    "jsme-editor": "^2024.4.29",
+    "multer": "^2.5.0",
+    "plotly.js-dist-min": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PGBeermann/IRAnalizador.git"
+  }
+}
